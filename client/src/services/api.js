@@ -43,10 +43,12 @@ export const uploadFile = async (file) => {
 
 /**
  * Download generated Excel file
+ * @param {string} sessionId - Session ID from upload response
  * @returns {Promise<Blob>} - Excel file blob
  */
-export const downloadExcel = async () => {
+export const downloadExcel = async (sessionId) => {
     const response = await api.get('/api/download/excel', {
+        params: { sessionId },
         responseType: 'blob',
     });
 
@@ -55,10 +57,12 @@ export const downloadExcel = async () => {
 
 /**
  * Download generated PDF file
+ * @param {string} sessionId - Session ID from upload response
  * @returns {Promise<Blob>} - PDF file blob
  */
-export const downloadPDF = async () => {
+export const downloadPDF = async (sessionId) => {
     const response = await api.get('/api/download/pdf', {
+        params: { sessionId },
         responseType: 'blob',
     });
 
