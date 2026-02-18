@@ -257,29 +257,49 @@ export const createCOWorkbook = (data) => {
     });
 
     // ========== PRE-CALCULATE MATRIX DATA (JS Math for Summary Statement) ==========
+    // PRODUCTION-SAFE: Normalize all values before calculations
+    const normalizeValue = (v) => {
+        if (v == null) return 0;
+        if (typeof v === 'number') return isNaN(v) ? 0 : v;
+        if (typeof v === 'string') {
+            const cleaned = v.trim().replace(/%/g, '').replace(/,/g, '');
+            const num = Number(cleaned);
+            return isNaN(num) ? 0 : num;
+        }
+        return 0;
+    };
+
     const totalStudents = students.length || 1;
     const matrixStats = coIds.map((id, idx) => {
         const coKey = `co${id}`;
-        const ciaMax = ciaMaxMarks[id] || 1;
-        const assMax = assessmentMaxMarks[id] || 1;
+        const ciaMax = normalizeValue(ciaMaxMarks[id]) || 1;
+        const assMax = normalizeValue(assessmentMaxMarks[id]) || 1;
 
         const getLvl = (p) => p > 70 ? 3 : p > 65 ? 2 : p > 60 ? 1 : 0;
 
-        // CIA Level (Integer)
-        const ciaAbove = students.filter(s => Math.round((s.marks[coKey] || 0) / ciaMax * 100) > 65).length;
+        // CIA Level (Integer) - NORMALIZED
+        const ciaAbove = students.filter(s => {
+            const mark = normalizeValue(s.marks[coKey]);
+            const percentage = Math.round((mark / ciaMax) * 100);
+            return percentage > 65;
+        }).length;
         const ciaPerc = Math.round((ciaAbove / totalStudents) * 100);
         const ciaLvl = getLvl(ciaPerc);
 
-        // Assessment Level (Integer)
-        const assAbove = students.filter(s => Math.round((s.assessmentMarks?.[coKey] || 0) / assMax * 100) > 65).length;
+        // Assessment Level (Integer) - NORMALIZED
+        const assAbove = students.filter(s => {
+            const mark = normalizeValue(s.assessmentMarks?.[coKey]);
+            const percentage = Math.round((mark / assMax) * 100);
+            return percentage > 65;
+        }).length;
         const assPerc = Math.round((assAbove / totalStudents) * 100);
         const assLvl = getLvl(assPerc);
 
-        // Semester Level (External - Integer)
-        const semLvl = Math.round(semesterData[idx]?.value ?? 3.0);
+        // Semester Level (External - Integer) - NORMALIZED
+        const semLvl = Math.round(normalizeValue(semesterData[idx]?.value) || 3.0);
 
-        // Exit Survey Level (External - DECIMAL as requested)
-        const exitLvl = exitData[idx]?.value ?? 2.0;
+        // Exit Survey Level (External - DECIMAL) - NORMALIZED
+        const exitLvl = normalizeValue(exitData[idx]?.value) || 2.0;
 
         // Average of levels (Direct Method is Integer)
         const odLvl = Math.round((ciaLvl + assLvl + semLvl) / 3);

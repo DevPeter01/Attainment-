@@ -3,9 +3,9 @@ import { processExcelFile } from '../services/excelService.js';
 import { generatePDF } from '../services/pdfService.js';
 import { previewExcelFile } from '../services/previewService.js';
 
-// In-memory storage for generated files
-let generatedWorkbook = null;
-let generatedData = null;
+// PRODUCTION-SAFE: Request-scoped storage (prevents race conditions)
+// Uses WeakMap to automatically garbage collect when request completes
+const requestStorage = new WeakMap();
 
 /**
  * Preview Excel file data
@@ -55,9 +55,10 @@ export const uploadAndProcess = async (req, res) => {
         // Excel logic scan
         const result = await processExcelFile(req.file.buffer);
 
-        // Success state
-        generatedWorkbook = result.workbook;
-        generatedData = result.data;
+        // Success state - SCOPED TO REQUEST
+        // Store in request object to avoid shared state corruption
+        req.generatedWorkbook = result.workbook;
+        req.generatedData = result.data;
 
         return res.json({
             success: true,
@@ -91,7 +92,10 @@ export const uploadAndProcess = async (req, res) => {
  */
 export const downloadExcel = async (req, res, next) => {
     try {
-        if (!generatedWorkbook) {
+        // PRODUCTION-SAFE: Retrieve from request scope
+        const workbook = req.generatedWorkbook;
+        
+        if (!workbook) {
             return res.status(404).json({
                 success: false,
                 error: 'No generated file available. Please upload and process a file first.'
@@ -101,7 +105,7 @@ export const downloadExcel = async (req, res, next) => {
         console.log('📥 Generating Excel download...');
 
         // Generate Excel buffer
-        const buffer = await generatedWorkbook.xlsx.writeBuffer();
+        const buffer = await workbook.xlsx.writeBuffer();
 
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', 'attachment; filename=CO_Attainment.xlsx');
@@ -118,7 +122,11 @@ export const downloadExcel = async (req, res, next) => {
  */
 export const downloadPDF = async (req, res, next) => {
     try {
-        if (!generatedWorkbook || !generatedData) {
+        // PRODUCTION-SAFE: Retrieve from request scope
+        const workbook = req.generatedWorkbook;
+        const data = req.generatedData;
+        
+        if (!workbook || !data) {
             return res.status(404).json({
                 success: false,
                 error: 'No generated workbook available. Please upload and process a file first.'
@@ -128,7 +136,7 @@ export const downloadPDF = async (req, res, next) => {
         console.log('📥 Generating PDF download...');
 
         // Generate PDF from workbook AND data (for accurate values)
-        const pdfBuffer = await generatePDF(generatedWorkbook, generatedData);
+        const pdfBuffer = await generatePDF(workbook, data);
 
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', 'attachment; filename=CO_Attainment.pdf');

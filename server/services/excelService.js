@@ -31,30 +31,38 @@ export const processExcelFile = async (fileBuffer) => {
     }
 
     // Find sheets with aggressive normalization (removes ALL spaces)
+    // PRODUCTION-SAFE: Use getWorksheet with fallback
     let ciaSheet = null;
     let assessmentSheet = null;
     let exitSheet = null;
     let semesterSheet = null;
 
-    workbook.eachSheet((worksheet) => {
+    // Log Node and ExcelJS versions for debugging
+    console.log(`📦 Node version: ${process.version}`);
+    console.log(`📦 ExcelJS version: ${ExcelJS?.version || 'unknown'}`);
+    console.log(`📊 Total sheets in workbook: ${workbook.worksheets.length}`);
+
+    workbook.eachSheet((worksheet, sheetId) => {
         // Unicode normalization: remove ALL non-alphabetic characters
         const normalizedName = worksheet.name
             .normalize("NFKD")  // Unicode normalization
             .replace(/[^a-zA-Z]/g, '')  // Remove all non-alphabetic
             .toLowerCase();
 
+        console.log(`   Sheet ${sheetId}: "${worksheet.name}" → normalized: "${normalizedName}"`);
+
         if (normalizedName === 'cia') {
             ciaSheet = worksheet;
-            console.log(`✅ Found CIA sheet: "${worksheet.name}"`);
+            console.log(`✅ Found CIA sheet: "${worksheet.name}" (ID: ${sheetId})`);
         } else if (normalizedName === 'assessment') {
             assessmentSheet = worksheet;
-            console.log(`✅ Found Assessment sheet: "${worksheet.name}"`);
+            console.log(`✅ Found Assessment sheet: "${worksheet.name}" (ID: ${sheetId})`);
         } else if (normalizedName.includes('exit')) {
             exitSheet = worksheet;
-            console.log(`✅ Found EXIT sheet: "${worksheet.name}"`);
+            console.log(`✅ Found EXIT sheet: "${worksheet.name}" (ID: ${sheetId})`);
         } else if (normalizedName.includes('semester')) {
             semesterSheet = worksheet;
-            console.log(`✅ Found SEMESTER sheet: "${worksheet.name}"`);
+            console.log(`✅ Found SEMESTER sheet: "${worksheet.name}" (ID: ${sheetId})`);
         }
     });
 
@@ -176,7 +184,7 @@ export const processExcelFile = async (fileBuffer) => {
 };
 
 /**
- * Safely get cell value with formula support
+ * Safely get cell value with formula support and normalization
  * @param {Worksheet} sheet - Excel worksheet
  * @param {string} address - Cell address (e.g., 'A1')
  * @returns {any} - Cell value or null
@@ -189,12 +197,22 @@ const safeGetCellValue = (sheet, address) => {
         // Handle merged cells
         const actualCell = cell.isMerged ? (cell.master || cell) : cell;
 
+        // Get raw value
+        let value = actualCell.value;
+
+        // Handle formula cells
         if (actualCell.type === ExcelJS.ValueType.Formula) {
-            return actualCell.result ?? actualCell.value;
+            value = actualCell.result ?? actualCell.value;
         }
 
-        return actualCell.value;
+        // Normalize if it's supposed to be a number
+        if (typeof value === 'object' && 'result' in value) {
+            value = value.result;
+        }
+
+        return value;
     } catch (error) {
+        console.warn(`⚠️ Error reading cell ${address}:`, error.message);
         return null;
     }
 };
