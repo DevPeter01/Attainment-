@@ -1,9 +1,14 @@
 import axios from 'axios';
 
-// Use environment variable or fallback to production URL
+// Environment variable for backend API URL
 // For local dev: VITE_API_URL=http://localhost:5000/api
 // For production: Set in Netlify environment variables
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://co-attainment-8508.onrender.com/api';
+// REQUIRED: This must be set in .env or Netlify dashboard
+const API_BASE_URL = import.meta.env.VITE_API_URL;
+
+if (!API_BASE_URL) {
+    throw new Error('VITE_API_URL environment variable is not set. Please configure it in .env file or Netlify dashboard.');
+}
 
 const api = axios.create({
     baseURL: API_BASE_URL,
