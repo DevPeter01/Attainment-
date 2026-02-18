@@ -21,10 +21,6 @@ const PORT = process.env.PORT || 5000;
 // ================================
 // CORS CONFIGURATION
 // ================================
-// Allowed origins:
-// - Local dev
-// - Netlify frontend (via env)
-// - Flexible for future domains
 const allowedOrigins = [
   "http://localhost:5173",
   "http://127.0.0.1:5173",
@@ -35,12 +31,12 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow server-to-server, Postman, curl
+    // Allow Postman, curl, server-to-server
     if (!origin) return callback(null, true);
 
-    const isDevelopment = process.env.NODE_ENV !== "production";
+    const isProduction = process.env.NODE_ENV === "production";
 
-    if (isDevelopment || allowedOrigins.includes(origin)) {
+    if (!isProduction || allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
 
@@ -61,7 +57,7 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 // ================================
-// HEALTH CHECKS (RENDER NEEDS THIS)
+// HEALTH CHECKS (RENDER REQUIRED)
 // ================================
 app.get("/", (req, res) => {
   res.status(200).json({
