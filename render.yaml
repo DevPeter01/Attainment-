@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: co-attainment-backend
+    runtime: node
+    region: oregon
+    buildCommand: npm install
+    startCommand: npm start
+    rootDir: server
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CLIENT_ORIGINS
+        sync: false
