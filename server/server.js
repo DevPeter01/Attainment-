@@ -22,12 +22,15 @@ const PORT = process.env.PORT || 5000;
 // CORS CONFIGURATION
 // ================================
 const allowedOrigins = [
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'https://attainment-co.netlify.app',
   ...(process.env.CLIENT_ORIGINS
-    ? process.env.CLIENT_ORIGINS.split(",").map(origin => origin.trim())
+    ? process.env.CLIENT_ORIGINS.split(',').map(origin => origin.trim())
     : [])
 ];
+
+
 
 const corsOptions = {
   origin: (origin, callback) => {
