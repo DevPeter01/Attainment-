@@ -14,6 +14,7 @@ const Home = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [sessionId, setSessionId] = useState(null); // Store session ID for downloads
 
   const handleFileSelect = (file) => {
     setSelectedFile(file);
@@ -31,6 +32,8 @@ const Home = () => {
       const response = await uploadFile(selectedFile);
 
       if (response.success) {
+        // Store session ID for downloads
+        setSessionId(response.sessionId);
         toast.success(response.message || 'CO Generated Successfully!');
         setIsSuccess(true);
       } else {
@@ -57,8 +60,12 @@ const Home = () => {
 
   const handleDownloadExcel = async () => {
     try {
+      if (!sessionId) {
+        toast.error('Session expired. Please upload the file again.');
+        return;
+      }
       toast.loading('Preparing Excel file...');
-      const blob = await downloadExcel();
+      const blob = await downloadExcel(sessionId);
       downloadFile(blob, 'CO_Attainment.xlsx');
       toast.dismiss();
       toast.success('Excel file downloaded successfully!');
@@ -71,8 +78,12 @@ const Home = () => {
 
   const handleDownloadPDF = async () => {
     try {
+      if (!sessionId) {
+        toast.error('Session expired. Please upload the file again.');
+        return;
+      }
       toast.loading('Generating PDF...');
-      const blob = await downloadPDF();
+      const blob = await downloadPDF(sessionId);
       downloadFile(blob, 'CO_Attainment.pdf');
       toast.dismiss();
       toast.success('PDF file downloaded successfully!');
@@ -87,6 +98,7 @@ const Home = () => {
     setSelectedFile(null);
     setIsSuccess(false);
     setIsProcessing(false);
+    setSessionId(null); // Clear session ID
   };
 
   return (

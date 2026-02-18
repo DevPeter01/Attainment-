@@ -3,9 +3,21 @@ import { processExcelFile } from '../services/excelService.js';
 import { generatePDF } from '../services/pdfService.js';
 import { previewExcelFile } from '../services/previewService.js';
 
-// PRODUCTION-SAFE: Request-scoped storage (prevents race conditions)
-// Uses WeakMap to automatically garbage collect when request completes
-const requestStorage = new WeakMap();
+// PRODUCTION-SAFE: In-memory storage with auto-cleanup
+// Maps session ID to workbook data
+const workbookCache = new Map();
+const CACHE_CLEANUP_INTERVAL = 30 * 60 * 1000; // 30 minutes
+
+// Auto-cleanup old entries every 30 minutes
+setInterval(() => {
+    const now = Date.now();
+    for (const [key, value] of workbookCache.entries()) {
+        if (now - value.timestamp > CACHE_CLEANUP_INTERVAL) {
+            workbookCache.delete(key);
+            console.log(`🗑️ Cleaned up cached workbook for session: ${key}`);
+        }
+    }
+}, CACHE_CLEANUP_INTERVAL);
 
 /**
  * Preview Excel file data
@@ -55,14 +67,22 @@ export const uploadAndProcess = async (req, res) => {
         // Excel logic scan
         const result = await processExcelFile(req.file.buffer);
 
-        // Success state - SCOPED TO REQUEST
-        // Store in request object to avoid shared state corruption
-        req.generatedWorkbook = result.workbook;
-        req.generatedData = result.data;
+        // Generate unique session ID for this upload
+        const sessionId = req.sessionID || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Store in cache with timestamp for auto-cleanup
+        workbookCache.set(sessionId, {
+            workbook: result.workbook,
+            data: result.data,
+            timestamp: Date.now()
+        });
+        
+        console.log(`💾 Cached workbook for session: ${sessionId}`);
 
         return res.json({
             success: true,
             message: 'CO Generated Successfully',
+            sessionId: sessionId, // Send session ID to frontend
             summary: {
                 totalStudents: result.data.students.length,
                 ciaMaxMarks: result.data.ciaMaxMarks,
@@ -92,15 +112,27 @@ export const uploadAndProcess = async (req, res) => {
  */
 export const downloadExcel = async (req, res, next) => {
     try {
-        // PRODUCTION-SAFE: Retrieve from request scope
-        const workbook = req.generatedWorkbook;
+        // Retrieve session ID from query parameter
+        const sessionId = req.query.sessionId;
         
-        if (!workbook) {
+        if (!sessionId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Session ID is required'
+            });
+        }
+        
+        // Retrieve from cache
+        const cached = workbookCache.get(sessionId);
+        
+        if (!cached || !cached.workbook) {
             return res.status(404).json({
                 success: false,
                 error: 'No generated file available. Please upload and process a file first.'
             });
         }
+        
+        const workbook = cached.workbook;
 
         console.log('📥 Generating Excel download...');
 
@@ -122,16 +154,28 @@ export const downloadExcel = async (req, res, next) => {
  */
 export const downloadPDF = async (req, res, next) => {
     try {
-        // PRODUCTION-SAFE: Retrieve from request scope
-        const workbook = req.generatedWorkbook;
-        const data = req.generatedData;
+        // Retrieve session ID from query parameter
+        const sessionId = req.query.sessionId;
         
-        if (!workbook || !data) {
+        if (!sessionId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Session ID is required'
+            });
+        }
+        
+        // Retrieve from cache
+        const cached = workbookCache.get(sessionId);
+        
+        if (!cached || !cached.workbook || !cached.data) {
             return res.status(404).json({
                 success: false,
                 error: 'No generated workbook available. Please upload and process a file first.'
             });
         }
+        
+        const workbook = cached.workbook;
+        const data = cached.data;
 
         console.log('📥 Generating PDF download...');
 
