@@ -1,4 +1,4 @@
-import puppeteer from 'puppeteer';
+import puppeteer from "puppeteer-core";
 import { AppError } from '../middleware/errorHandler.js';
 
 export const generatePDF = async (workbook, data) => {
