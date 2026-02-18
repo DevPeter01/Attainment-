@@ -1,9 +1,10 @@
 import axios from 'axios';
 
 // Environment variable for backend API URL
-// For local dev: VITE_API_URL=http://localhost:5000/api
-// For production: Set in Netlify environment variables
+// For local dev: VITE_API_URL=http://localhost:5000
+// For production: VITE_API_URL=https://your-backend.onrender.com
 // REQUIRED: This must be set in .env or Netlify dashboard
+// Note: All API routes are prefixed with /api in the code
 const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 if (!API_BASE_URL) {
@@ -31,7 +32,7 @@ export const uploadFile = async (file) => {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await api.post('/upload', formData, {
+    const response = await api.post('/api/upload', formData, {
         headers: {
             'Content-Type': 'multipart/form-data',
         },
@@ -45,7 +46,7 @@ export const uploadFile = async (file) => {
  * @returns {Promise<Blob>} - Excel file blob
  */
 export const downloadExcel = async () => {
-    const response = await api.get('/download/excel', {
+    const response = await api.get('/api/download/excel', {
         responseType: 'blob',
     });
 
@@ -57,7 +58,7 @@ export const downloadExcel = async () => {
  * @returns {Promise<Blob>} - PDF file blob
  */
 export const downloadPDF = async () => {
-    const response = await api.get('/download/pdf', {
+    const response = await api.get('/api/download/pdf', {
         responseType: 'blob',
     });
 
