@@ -1,15 +1,66 @@
 import ExcelJS from 'exceljs';
 import { AppError } from '../middleware/errorHandler.js';
 
+// ===== CRITICAL: PRODUCTION-SAFE CELL NORMALIZATION =====
+/**
+ * Normalize any cell value to a number with ZERO assumptions
+ * Handles: formulas, strings, nulls, percentages, rich text
+ * @param {any} value - Raw cell value from Excel
+ * @returns {number} - Normalized number or 0
+ */
+const normalizeCell = (value) => {
+    // Null/undefined safety
+    if (value == null) return 0;
+
+    // Formula cell result extraction
+    if (typeof value === 'object') {
+        // ExcelJS formula object: { formula, result }
+        if ('result' in value) {
+            return normalizeCell(value.result);
+        }
+        // Rich text or shared string
+        if ('richText' in value || 'sharedString' in value) {
+            return 0;
+        }
+        return 0;
+    }
+
+    // String handling
+    if (typeof value === 'string') {
+        // Strip whitespace
+        let cleaned = value.trim();
+        
+        // Remove percentage signs
+        cleaned = cleaned.replace(/%/g, '');
+        
+        // Remove commas (locale formatting)
+        cleaned = cleaned.replace(/,/g, '');
+        
+        // Empty string check
+        if (cleaned === '') return 0;
+        
+        // Convert to number
+        const num = Number(cleaned);
+        return isNaN(num) ? 0 : num;
+    }
+
+    // Direct number
+    if (typeof value === 'number') {
+        return isNaN(value) ? 0 : value;
+    }
+
+    // Boolean or other types
+    return 0;
+};
+
 // --- SAFE HELPERS ---
 const getActualCell = (c) => { if (!c) return null; return c.isMerged ? (c.master || c) : c; };
 const getNumeric = (c) => {
     const ac = getActualCell(c);
     if (!ac) return null;
     const rv = ac.result ?? ac.value;
-    if (typeof rv === 'number') return rv;
-    if (rv === null || rv === undefined || (typeof rv === 'string' && rv.trim() === '')) return null;
-    const n = Number(rv); return !isNaN(n) ? n : null;
+    // CRITICAL: Use normalizeCell instead of implicit coercion
+    return normalizeCell(rv);
 };
 const getVal = (c) => { const ac = getActualCell(c); return ac ? (ac.result ?? ac.value ?? null) : null; };
 const isRed = (c) => {
@@ -60,7 +111,7 @@ const extractBaseData = (sheet, sheetType, label) => {
 
     if (!headerRow) throw new AppError(`${sheetType}: CO headers not discovered.`, 422);
 
-    // Phase B: Context-Bound Red Scan
+    // Phase B: Context-Bound Red Scan (ENHANCED LOGGING)
     Object.keys(coCols).forEach(id => {
         const colNum = coCols[id];
         // Scan rows 1 to headerRow + 5 to find the red-colored max marks (typically in the header area)
@@ -69,7 +120,21 @@ const extractBaseData = (sheet, sheetType, label) => {
             const n = getNumeric(cell);
             if (n !== null && n > 0 && isRed(cell)) {
                 redMax[id] = n;
+                console.log(`🟢 ${sheetType} CO${id}: Found red max mark = ${n} at row ${r}, col ${colNum}`);
                 break;
+            }
+        }
+        
+        // Production debugging: Log if no red mark found
+        if (!redMax[id]) {
+            console.warn(`⚠️ ${sheetType} CO${id}: No red max mark found in col ${colNum}. Checking cell values...`);
+            // Debug: Print first 10 rows of this column
+            for (let r = 1; r <= Math.min(10, sheet.rowCount); r++) {
+                const cell = sheet.getRow(r).getCell(colNum);
+                const rawVal = cell.value;
+                const normalized = getNumeric(cell);
+                const color = cell.font?.color?.argb || 'NONE';
+                console.log(`   Row ${r}: rawValue=${JSON.stringify(rawVal)}, normalized=${normalized}, color=${color}`);
             }
         }
     });
@@ -95,7 +160,9 @@ const extractBaseData = (sheet, sheetType, label) => {
             marks: {}
         };
         Object.keys(coCols).forEach(id => {
-            s.marks[`co${id}`] = getNumeric(row.getCell(coCols[id])) || 0;
+            const rawValue = getNumeric(row.getCell(coCols[id]));
+            // CRITICAL: Ensure 0 instead of null for missing marks
+            s.marks[`co${id}`] = rawValue !== null ? rawValue : 0;
         });
         students.push(s);
     });

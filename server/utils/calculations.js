@@ -1,3 +1,21 @@
+/**
+ * Normalize cell value to number (same logic as dataExtractor)
+ * @param {any} value - Raw value
+ * @returns {number} - Normalized number
+ */
+const normalizeValue = (value) => {
+    if (value == null) return 0;
+    if (typeof value === 'object' && 'result' in value) return normalizeValue(value.result);
+    if (typeof value === 'string') {
+        const cleaned = value.trim().replace(/%/g, '').replace(/,/g, '');
+        if (cleaned === '') return 0;
+        const num = Number(cleaned);
+        return isNaN(num) ? 0 : num;
+    }
+    if (typeof value === 'number') return isNaN(value) ? 0 : value;
+    return 0;
+};
+
 export const calculateCOAttainment = (ciaStudents, assessmentStudents, redMaxMap) => {
     const assessmentMap = new Map();
     assessmentStudents.forEach(student => {
@@ -16,18 +34,23 @@ export const calculateCOAttainment = (ciaStudents, assessmentStudents, redMaxMap
             coTotals: {}
         };
 
-        // Phase D: Student Calculation (Dynamic COs)
+        // Phase D: Student Calculation (Dynamic COs) - PRODUCTION-SAFE
         const coIds = Object.keys(redMaxMap);
         coIds.forEach(coId => {
             const coKey = `co${coId}`;
 
-            // Context-Bound Max Marks
-            const ciaMax = redMaxMap[coId]?.cia || 0;
-            const assessmentMax = redMaxMap[coId]?.assessment || 0;
+            // Context-Bound Max Marks (NORMALIZED)
+            const ciaMax = normalizeValue(redMaxMap[coId]?.cia) || 0;
+            const assessmentMax = normalizeValue(redMaxMap[coId]?.assessment) || 0;
 
-            // Student Marks
-            const studentCIA = ciaStudent.marks[coKey] || 0;
-            const studentAssessment = aSt.marks[coKey] || 0;
+            // Student Marks (NORMALIZED)
+            const studentCIA = normalizeValue(ciaStudent.marks[coKey]);
+            const studentAssessment = normalizeValue(aSt.marks[coKey]);
+
+            // Production Debug Logging (TEMPORARY)
+            if (process.env.NODE_ENV === 'production' || process.env.DEBUG_CALC) {
+                console.log(`🧮 [${ciaStudent.rollNo}] CO${coId}: CIA=${studentCIA}/${ciaMax}, Ass=${studentAssessment}/${assessmentMax}`);
+            }
 
             // Apply Formula: ciaPart = (studentCIA / ciaMax) * 60
             const ciaPart = ciaMax > 0 ? (studentCIA / ciaMax) * 60 : 0;
@@ -40,6 +63,11 @@ export const calculateCOAttainment = (ciaStudents, assessmentStudents, redMaxMap
 
             // Round final to 2 decimals for internal storage
             results.coTotals[coKey] = parseFloat(finalCO.toFixed(2));
+            
+            // Production Debug Logging
+            if (process.env.NODE_ENV === 'production' || process.env.DEBUG_CALC) {
+                console.log(`   → ciaPart=${ciaPart.toFixed(2)}, assPart=${assessmentPart.toFixed(2)}, final=${results.coTotals[coKey]}`);
+            }
         });
 
         return results;

@@ -40,21 +40,37 @@ export const processExcelFile = async (fileBuffer) => {
 
   console.time('SHEET_DETECTION');
 
+  // Log Node and ExcelJS versions for production debugging
+  console.log(`📦 Node version: ${process.version}`);
+  console.log(`📦 ExcelJS version: ${ExcelJS?.version || 'unknown'}`);
+  console.log(`📊 Total sheets in workbook: ${workbook.worksheets.length}`);
+
   let ciaSheet = null;
   let assessmentSheet = null;
   let exitSheet = null;
   let semesterSheet = null;
 
-  workbook.eachSheet((worksheet) => {
+  workbook.eachSheet((worksheet, sheetId) => {
     const normalizedName = worksheet.name
       .normalize('NFKD')
       .replace(/[^a-zA-Z]/g, '')
       .toLowerCase();
 
-    if (normalizedName === 'cia') ciaSheet = worksheet;
-    else if (normalizedName === 'assessment') assessmentSheet = worksheet;
-    else if (normalizedName.includes('exit')) exitSheet = worksheet;
-    else if (normalizedName.includes('semester')) semesterSheet = worksheet;
+    console.log(`   Sheet ${sheetId}: "${worksheet.name}" → normalized: "${normalizedName}"`);
+
+    if (normalizedName === 'cia') {
+      ciaSheet = worksheet;
+      console.log(`✅ Found CIA sheet: "${worksheet.name}" (ID: ${sheetId})`);
+    } else if (normalizedName === 'assessment') {
+      assessmentSheet = worksheet;
+      console.log(`✅ Found Assessment sheet: "${worksheet.name}" (ID: ${sheetId})`);
+    } else if (normalizedName.includes('exit')) {
+      exitSheet = worksheet;
+      console.log(`✅ Found EXIT sheet: "${worksheet.name}" (ID: ${sheetId})`);
+    } else if (normalizedName.includes('semester')) {
+      semesterSheet = worksheet;
+      console.log(`✅ Found SEMESTER sheet: "${worksheet.name}" (ID: ${sheetId})`);
+    }
   });
 
   console.timeEnd('SHEET_DETECTION');
